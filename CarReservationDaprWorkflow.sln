@@ -1,0 +1,71 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34728.123
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReservationManager", "ReservationManager\ReservationManager.csproj", "{94CDD77F-107D-44E3-9E89-31ECBCA151BC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BillingManager", "BillingManager\BillingManager.csproj", "{EFD15D88-77E1-45D8-96D7-79079EC2141A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InventoryManager", "InventoryManager\InventoryManager.csproj", "{41F9F168-AD1B-4654-A0D2-CDF462F0774E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BookingManager", "BookingManager\BookingManager.csproj", "{20D67323-C622-4540-8517-9F5C436C3C43}"
+EndProject
+Project("{E53339B2-1760-4266-BCC7-CA923CBCF16C}") = "docker-compose", "docker-compose.dcproj", "{225A208F-C634-4819-8EF0-021E27340A12}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "dapr", "dapr", "{8539A855-D74F-4EB4-93C3-5AEEDCA5289E}"
+	ProjectSection(SolutionItems) = preProject
+		dapr\config.yaml = dapr\config.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "components", "components", "{BBB1CC8B-598D-4139-B1DC-B893E4945B90}"
+	ProjectSection(SolutionItems) = preProject
+		dapr\components\billing-queue.yaml = dapr\components\billing-queue.yaml
+		dapr\components\booking-queue.yaml = dapr\components\booking-queue.yaml
+		dapr\components\dapr-secretstore.json = dapr\components\dapr-secretstore.json
+		dapr\components\inventory-queue.yaml = dapr\components\inventory-queue.yaml
+		dapr\components\reservation-response-queue.yaml = dapr\components\reservation-response-queue.yaml
+		dapr\components\secretstore.yaml = dapr\components\secretstore.yaml
+		dapr\components\statestore.yaml = dapr\components\statestore.yaml
+		dapr\components\test-queue.yaml = dapr\components\test-queue.yaml
+		dapr\components\test-response-queue.yaml = dapr\components\test-response-queue.yaml
+		dapr\components\testcallback.yaml = dapr\components\testcallback.yaml
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{94CDD77F-107D-44E3-9E89-31ECBCA151BC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{94CDD77F-107D-44E3-9E89-31ECBCA151BC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{94CDD77F-107D-44E3-9E89-31ECBCA151BC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{94CDD77F-107D-44E3-9E89-31ECBCA151BC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EFD15D88-77E1-45D8-96D7-79079EC2141A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EFD15D88-77E1-45D8-96D7-79079EC2141A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EFD15D88-77E1-45D8-96D7-79079EC2141A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EFD15D88-77E1-45D8-96D7-79079EC2141A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{41F9F168-AD1B-4654-A0D2-CDF462F0774E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{41F9F168-AD1B-4654-A0D2-CDF462F0774E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{41F9F168-AD1B-4654-A0D2-CDF462F0774E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{41F9F168-AD1B-4654-A0D2-CDF462F0774E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{20D67323-C622-4540-8517-9F5C436C3C43}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{20D67323-C622-4540-8517-9F5C436C3C43}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{20D67323-C622-4540-8517-9F5C436C3C43}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{20D67323-C622-4540-8517-9F5C436C3C43}.Release|Any CPU.Build.0 = Release|Any CPU
+		{225A208F-C634-4819-8EF0-021E27340A12}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{225A208F-C634-4819-8EF0-021E27340A12}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{225A208F-C634-4819-8EF0-021E27340A12}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{225A208F-C634-4819-8EF0-021E27340A12}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{BBB1CC8B-598D-4139-B1DC-B893E4945B90} = {8539A855-D74F-4EB4-93C3-5AEEDCA5289E}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E248D7E6-6F98-4A63-B4BF-C5B52FC26C39}
+	EndGlobalSection
+EndGlobal

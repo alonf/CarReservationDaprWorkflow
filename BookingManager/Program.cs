@@ -1,0 +1,295 @@
+using Dapr.Client;
+using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Globalization;
+using System.Net;
+using BookingManager;
+using OpenTelemetry.Trace;
+using OpenTelemetry.Resources;
+using Dapr;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
+builder.Services.AddControllers().AddDapr().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false));
+    options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+});
+
+builder.Services.AddOpenTelemetry().WithTracing(tracing =>
+{
+    tracing.AddAspNetCoreInstrumentation();
+    tracing.AddHttpClientInstrumentation();
+    tracing.AddZipkinExporter(options =>
+    {
+        options.Endpoint = new Uri("http://zipkin:9411/api/v2/spans");
+    }).SetResourceBuilder(
+        ResourceBuilder.CreateDefault().AddService("BookingManagementService"));
+});
+
+builder.Services.AddHealthChecks();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+
+
+Dictionary<string, string> jsonMetadata = new() { { "contentType", "application/json" } };
+
+app.MapPost("/booking-queue", async (
+        [FromBody] CarReservationRequest request,
+        [FromHeader(Name = "x-message-dispatch-time")] string messageDispatchTimeHeader,
+        [FromServices] ILogger<Program> logger,
+        [FromHeader(Name = "x-callback-binding-name")] string callbackBindingName,
+        [FromHeader(Name = "x-callback-workflow-id")] string callbackWorkflowId,
+        [FromHeader(Name = "x-callback-event-name")] string callbackEventName,
+        [FromServices] DaprClient daprClient) =>
+{
+    logger.LogInformation("Received car reservation request for {CarClass} from {CustomerName}",
+        request.CarClass, request.CustomerName);
+
+    var resultBinding = new Dictionary<string, string>()
+    {
+        { "x-callback-workflow-id", callbackWorkflowId },
+        { "x-callback-event-name", callbackEventName }
+    };
+
+    var reservationId = request.ReservationId.ToString();
+
+    // Parse the dispatch time from the header
+    var decodedMessageDispatchTimeHeader = WebUtility.UrlDecode(messageDispatchTimeHeader);
+
+    if (DateTime.TryParseExact(decodedMessageDispatchTimeHeader, "o", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var messageDispatchTime))
+    {
+        logger.LogInformation("Reservation: {reservationId}, Message dispatch time: {messageDispatchTime}",
+            reservationId, messageDispatchTime);
+    }
+    else
+    {
+        logger.LogError("Reservation: {reservationId}, Invalid message dispatch time format.",
+            reservationId);
+        return;
+    }
+
+    var reservationOperationResult = new ReservationOperationResult()
+    {
+        ReservationId = request.ReservationId
+    };
+
+    ReservationState? reservationState = null;
+    string etag = string.Empty;
+
+    try
+    {
+        (reservationState, etag) = await daprClient.GetStateAndETagAsync<ReservationState>("statestore", reservationId, metadata: jsonMetadata);
+
+    }
+    catch (DaprException ex) when (ex.InnerException is Grpc.Core.RpcException { Status.StatusCode: Grpc.Core.StatusCode.Internal } grpcEx)
+    {
+        // Check specific RPC error message details if necessary
+        if (grpcEx.Status.Detail.Contains("redis: nil"))
+        {
+            logger.LogWarning("Reservation state not found for reservation id {reservationId}. Detail: {Detail}", reservationId, grpcEx.Status.Detail);
+        }
+        else
+        {
+            logger.LogError("An internal error occurred when accessing the state store: {Detail}", grpcEx.Status.Detail);
+            throw;
+        }
+    }
+
+    //supporting out-of-order message
+    if (reservationState != null && messageDispatchTime < reservationState.ReservationStatusUpdateTime)
+    {
+        logger.LogInformation("Receive an out of order message. Ignoring. {CustomerName}",
+            request.CustomerName);
+        return;
+    }
+
+    reservationState ??= new ReservationState
+    {
+        Id = request.ReservationId,
+        ReservationStatusUpdateTime = messageDispatchTime,
+        CustomerName = request.CustomerName,
+        IsReserved = false
+    };
+
+    var stateOptions = new StateOptions()
+    {
+        Consistency = ConsistencyMode.Strong,
+    };
+
+
+    switch (request.ActionType)
+    {
+        case ActionType.Reserve:
+            await ReserveCarAsync();
+            break;
+        case ActionType.Cancel:
+            await CancelCarReservationAsync();
+            break;
+        default:
+            logger.LogError("Unknown action type {ActionType}", request.ActionType);
+            break;
+    }
+
+    async Task ReserveCarAsync()
+    {
+        logger.LogInformation("Reserving car class {CarClass} for {CustomerName}", request.CarClass, request.CustomerName);
+
+        reservationState.IsReserved = true;
+
+        try
+        {
+            var result = await daprClient.TrySaveStateAsync("statestore", reservationId,
+                reservationState, etag, stateOptions, jsonMetadata);
+
+            logger.LogInformation("Car class {CarClass} {result} reserved for {CustomerName}",
+                request.CarClass, result ? "has" : "failed to", request.CustomerName);
+            reservationOperationResult.IsSuccess = result;
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Failed to reserve car class {CarClass} for {CustomerName}", request.CarClass, request.CustomerName);
+            reservationOperationResult.IsSuccess = false;
+        }
+
+        // Send the response to the response binding
+        await daprClient.InvokeBindingAsync(callbackBindingName, "create", reservationOperationResult,
+            resultBinding);
+    }
+
+
+    async Task CancelCarReservationAsync()
+    {
+
+        logger.LogInformation("Cancelling car class {CarClass} reservation id {reservationId} for {CustomerName}",
+            request.CarClass, reservationId, request.CustomerName);
+
+        reservationState.IsReserved = false;
+
+        // TTL set for 5 minutes, this has the effect of deleting the entry
+        // but only after the Saga is done, support for compensation
+        var metadata = new Dictionary<string, string>
+            {
+                { "ttlInSeconds", "300" },
+                { "contentType", "application/json" }
+            };
+
+        try
+        {
+            var result = await daprClient.TrySaveStateAsync("statestore", reservationId, reservationState,
+                etag, stateOptions, metadata);
+
+            reservationOperationResult.IsSuccess = result;
+            logger.LogInformation("Reservation id {reservationId} {result} cancelled for {CustomerName}",
+                reservationId, result ? "has" : "failed to", request.CustomerName);
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Failed to cancel reservation id {reservationId} for {CustomerName}", reservationId,
+                request.CustomerName);
+            reservationOperationResult.IsSuccess = false;
+        }
+
+        // Send the response to the response binding
+        await daprClient.InvokeBindingAsync(callbackBindingName, "create", reservationOperationResult,
+            resultBinding);
+    }
+})
+    .WithName("CarBooking")
+    .WithOpenApi();
+
+
+app.MapGet("/reservations/{reservationId}", async ([FromRoute] Guid reservationId, [FromServices] DaprClient daprClient, [FromServices] ILogger<Program> logger) =>
+{
+    logger.LogInformation($"Fetching reservation status for reservation ID: {reservationId}");
+
+    try
+    {
+        var reservationState = await daprClient.GetStateAsync<ReservationState>("statestore", reservationId.ToString(), metadata: jsonMetadata);
+
+        if (reservationState == null)
+        {
+            logger.LogWarning($"Reservation with ID: {reservationId} not found.");
+            return Results.NotFound(new { Message = $"Reservation with ID: {reservationId} not found." });
+        }
+
+        return Results.Ok(reservationState);
+    }
+    catch (DaprException ex) when (ex.InnerException is Grpc.Core.RpcException { Status.StatusCode: Grpc.Core.StatusCode.Internal } grpcEx)
+    {
+        if (grpcEx.Status.Detail.Contains("redis: nil"))
+        {
+            logger.LogWarning("Reservation state not found for reservation id {reservationId}. Detail: {Detail}", reservationId, grpcEx.Status.Detail);
+            return Results.NotFound(new { Message = $"Reservation with ID: {reservationId} not found." });
+        }
+
+        logger.LogError("An internal error occurred when accessing the state store: {Detail}", grpcEx.Status.Detail);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, $"Error fetching reservation status for reservation ID: {reservationId}");
+    }
+    return Results.Problem("An error occurred while fetching the reservation status. Please try again later.");
+})
+    .WithName("GetReservationStatus")
+    .WithOpenApi(); // This adds the endpoint to OpenAPI/Swagger documentation if enabled
+
+app.MapGet("/customer-reservations", async ([FromQuery] string customerName, [FromServices] DaprClient daprClient, [FromServices] ILogger<Program> logger) =>
+{
+    logger.LogInformation($"Fetching reservations for customer: {customerName}");
+
+    try
+    {
+        var query = $$"""
+            {
+                "filter": {
+                    "EQ": { "customerName": "{{customerName}}" }
+                }
+            }
+            """;
+
+        var metadata = new Dictionary<string, string>
+            {
+                { "contentType", "application/json" },
+                { "queryIndexName", "customerNameIndex" }
+            };
+
+        var reservations = await daprClient.QueryStateAsync<ReservationState>("statestore", query, metadata);
+
+        var customerReservations = reservations.Results;
+
+        return Results.Ok(customerReservations.Select(r => r.Data).ToArray());
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, $"Error fetching reservations for customer: {customerName}");
+        return Results.Problem("An error occurred while fetching the reservations. Please try again later.");
+    }
+})
+    .WithName("GetCustomerReservations")
+    .WithOpenApi();
+
+
+
+app.MapHealthChecks("/healthz");
+app.MapControllers();
+app.MapSubscribeHandler();
+app.UseRouting();
+
+app.Run();

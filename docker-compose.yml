@@ -1,0 +1,240 @@
+version: '3.7'
+
+services:
+##################################################
+# Reservation Manager Microservice + Dapr sidecars
+##################################################
+  reservationmanager:
+    image: ${DOCKER_REGISTRY-}reservationmanager
+    build:
+      context: .
+      dockerfile: ReservationManager/Dockerfile
+    ports:
+      - "7545:80"
+    networks:
+      - car-reservation-network
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://reservationmanager:80
+    depends_on:
+      - rabbitmq
+      - redis
+      - zipkin
+      - placement
+
+  reservationmanager-dapr:
+    image: "daprio/daprd:edge"
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 120s
+    command: ["./daprd",
+     "-app-id", "reservationmanager",
+     "-app-port", "80",
+     "-placement-host-address", "placement:50006",
+     "-dapr-http-port", "3500",
+     "-resources-path", "/dapr/components",
+     "-config", "/dapr/config.yaml"]
+    volumes:
+        - "./dapr/:/dapr"
+    depends_on:
+      - reservationmanager
+    network_mode: "service:reservationmanager"
+    
+##################################################
+# Billing Manager Microservice + Dapr sidecars
+##################################################
+  billingmanager:
+    image: ${DOCKER_REGISTRY-}billingmanager
+    build:
+      context: .
+      dockerfile: BillingManager/Dockerfile
+    depends_on:
+      - rabbitmq
+      - redis
+      - zipkin
+      - placement
+    networks:
+      - car-reservation-network
+    environment:
+    # - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://billingmanager:80
+
+  billingmanager-dapr:
+    image: "daprio/daprd:edge"
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 120s
+    command: ["./daprd",
+     "-app-id", "billingmanager",
+     "-app-port", "80",
+     "-placement-host-address", "placement:50006",
+     "-dapr-http-port", "3500",
+     "-resources-path", "/dapr/components",
+     "-config", "/dapr/config.yaml"]
+    volumes:
+        - "./dapr/:/dapr"
+    depends_on:
+      - billingmanager
+    network_mode: "service:billingmanager"
+  
+##################################################
+# Inventory Manager Microservice + Dapr sidecars
+##################################################
+  inventorymanager:
+    image: ${DOCKER_REGISTRY-}inventorymanager
+    build:
+      context: .
+      dockerfile: InventoryManager/Dockerfile
+    depends_on:
+      - rabbitmq
+      - redis
+      - zipkin
+      - placement
+    networks:
+      - car-reservation-network
+    environment:
+    # - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://inventorymanager:80
+
+  inventorymanager-dapr:
+    image: "daprio/daprd:edge"
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 120s
+    command: ["./daprd",
+     "-app-id", "inventorymanager",
+     "-app-port", "80",
+     "-placement-host-address", "placement:50006",
+     "-dapr-http-port", "3500",
+     "-resources-path", "/dapr/components",
+     "-config", "/dapr/config.yaml"]
+    volumes:
+        - "./dapr/:/dapr"
+    depends_on:
+      - inventorymanager
+    network_mode: "service:inventorymanager"
+
+##################################################
+# Booking Manager Microservice + Dapr sidecars
+##################################################
+  bookingmanager:
+    image: ${DOCKER_REGISTRY-}bookingmanager
+    build:
+      context: .
+      dockerfile: BookingManager/Dockerfile
+    depends_on:
+      - rabbitmq
+      - redis
+      - zipkin
+      - placement
+    networks:
+      - car-reservation-network
+    environment:
+    # - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://bookingmanager:80
+
+  bookingmanager-dapr:
+    image: "daprio/daprd:edge"
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 120s
+    command: ["./daprd",
+     "-app-id", "bookingmanager",
+     "-app-port", "80",
+     "-placement-host-address", "placement:50006",
+     "-dapr-http-port", "3500",
+     "-resources-path", "/dapr/components",
+     "-config", "/dapr/config.yaml"]
+    volumes:
+        - "./dapr/:/dapr"
+    depends_on:
+      - bookingmanager
+    network_mode: "service:bookingmanager"
+
+############################
+# RabitMQ
+############################
+  rabbitmq:
+    image: "rabbitmq:3-management-alpine"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - car-reservation-network
+
+############################
+# Redis state store
+############################
+  redis:
+    image: "redis/redis-stack-server:latest"
+    hostname: redisserver
+    ports:
+      - "6379:6379"
+    networks:
+      - car-reservation-network
+    environment:
+     - REDIS_REPLICATION_MODE=master
+ 
+#############################
+## Dapr placement service
+#############################
+  placement:
+    image: "daprio/dapr"
+    command: ["./placement", "-port", "50006"]
+    ports:
+      - "50006:50006"
+    networks:
+      - car-reservation-network
+ 
+############################
+# Dapr zipkin service
+############################
+  zipkin:
+    image: "openzipkin/zipkin"
+    ports:
+      - "9411:9411"
+    networks:
+      - car-reservation-network
+ 
+#############################
+## Dapr Dashboard
+#############################
+  dapr-dashboard:
+    image: daprio/dashboard:latest
+    container_name: dashboard
+    ports:
+      - "8080:8080"
+    volumes:
+      - "./dapr/:/home/nonroot/.dapr"
+    networks:
+      - car-reservation-network
+ 
+############################
+# Global settings
+############################
+ 
+networks:
+  car-reservation-network:
+           
+volumes: 
+  workspace:  
+
+
+
+
+
+
+
+

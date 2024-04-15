@@ -1,0 +1,26 @@
+{
+  "profiles": {
+    "Docker Compose": {
+      "commandName": "DockerCompose",
+      "commandVersion": "1.0",
+      "composeLaunchAction": "LaunchBrowser",
+      "composeLaunchServiceName": "reservationmanager",
+      "composeLaunchUrl": "{Scheme}://localhost:{ServicePort}/swagger",
+      "serviceActions": {
+        "reservationmanager": "StartDebugging",
+        "billingmanager": "StartDebugging",
+        "bookingmanager": "StartDebugging",
+        "inventorymanager": "StartDebugging",
+        "billingmanager-dapr": "StartWithoutDebugging",
+        "bookingmanager-dapr": "StartWithoutDebugging",
+        "dapr-dashboard": "StartWithoutDebugging",
+        "inventorymanager-dapr": "StartWithoutDebugging",
+        "placement": "StartWithoutDebugging",
+        "rabbitmq": "StartWithoutDebugging",
+        "redis": "StartWithoutDebugging",
+        "reservationmanager-dapr": "StartWithoutDebugging",
+        "zipkin": "StartWithoutDebugging"
+      }
+    }
+  }
+}

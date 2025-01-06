@@ -23,7 +23,7 @@ services:
       - placement
 
   reservationmanager-dapr:
-    image: "daprio/daprd:edge"
+    image: "daprio/daprd:1.13.5"
     deploy:
       restart_policy:
         condition: on-failure
@@ -35,6 +35,7 @@ services:
      "-app-port", "80",
      "-placement-host-address", "placement:50006",
      "-dapr-http-port", "3500",
+     "-dapr-grpc-port", "50001",
      "-resources-path", "/dapr/components",
      "-config", "/dapr/config.yaml"]
     volumes:
@@ -63,7 +64,7 @@ services:
       - ASPNETCORE_URLS=http://billingmanager:80
 
   billingmanager-dapr:
-    image: "daprio/daprd:edge"
+    image: "daprio/daprd:1.13.5"
     deploy:
       restart_policy:
         condition: on-failure
@@ -103,7 +104,7 @@ services:
       - ASPNETCORE_URLS=http://inventorymanager:80
 
   inventorymanager-dapr:
-    image: "daprio/daprd:edge"
+    image: "daprio/daprd:1.13.5"
     deploy:
       restart_policy:
         condition: on-failure
@@ -143,7 +144,7 @@ services:
       - ASPNETCORE_URLS=http://bookingmanager:80
 
   bookingmanager-dapr:
-    image: "daprio/daprd:edge"
+    image: "daprio/daprd:1.13.5"
     deploy:
       restart_policy:
         condition: on-failure
@@ -191,7 +192,7 @@ services:
 ## Dapr placement service
 #############################
   placement:
-    image: "daprio/dapr"
+    image: "daprio/dapr:1.13.5"
     command: ["./placement", "-port", "50006"]
     ports:
       - "50006:50006"

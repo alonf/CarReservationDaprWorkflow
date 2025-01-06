@@ -39,6 +39,13 @@ builder.Services.AddDaprWorkflow(options =>
     options.RegisterActivity<ValidateBillingForReservationActivity>();
 });
 
+// Dapr uses a random port for gRPC by default. If we don't know what that port
+// is (because this app was started separate from dapr), then assume 4001.
+if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DAPR_GRPC_PORT")))
+{
+    Environment.SetEnvironmentVariable("DAPR_GRPC_PORT", "50001");
+}
+
 builder.Services.AddOpenTelemetry().WithTracing(tracing =>
 {
     tracing.AddAspNetCoreInstrumentation(options =>
@@ -262,6 +269,7 @@ app.MapPost("/reservation-response-queue", async (
 app.MapHealthChecks("/healthz");
 app.MapControllers();
 app.MapSubscribeHandler();
+
 app.UseRouting();
 
 app.Run();
